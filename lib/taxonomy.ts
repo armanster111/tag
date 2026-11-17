@@ -2,13 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { normalizeTag } from "@/lib/tags";
 import {
   CATEGORY_LABELS,
+  SUBTAGS,
   TAXONOMY,
   type TaxonomyCategory,
+  type TaxonomySubtag,
   type TaxonomyTag,
 } from "@/lib/taxonomy-data";
 
-export type { TaxonomyCategory, TaxonomyTag };
-export { CATEGORY_LABELS, TAXONOMY };
+export type { TaxonomyCategory, TaxonomySubtag, TaxonomyTag };
+export { CATEGORY_LABELS, SUBTAGS, TAXONOMY };
 
 export async function listTaxonomy(): Promise<TaxonomyTag[]> {
   const supabase = await createClient();
@@ -49,96 +51,41 @@ export async function isApprovedTag(slug: string): Promise<boolean> {
   return Boolean(await getTaxonomyTag(slug));
 }
 
-export async function suggestTag(input: {
-  label: string;
-  category?: string;
-  note?: string;
-  suggestedBy?: string | null;
-}) {
-  const label = input.label.trim().slice(0, 60);
-  if (label.length < 2) throw new Error("Label too short");
-  const slug = normalizeTag(label);
-  if (!slug) throw new Error("Invalid tag");
-  if (await isApprovedTag(slug)) throw new Error("Already in taxonomy");
-
-  const supabase = await createClient();
-  const { data: existing } = await supabase
-    .from("tag_suggestions")
-    .select("id")
-    .eq("slug", slug)
-    .eq("status", "pending")
-    .maybeSingle();
-  if (existing) throw new Error("Already suggested");
-
-  const { error } = await supabase.from("tag_suggestions").insert({
-    slug,
-    label,
-    category: input.category?.trim() || null,
-    suggested_by: input.suggestedBy ?? null,
-    note: (input.note ?? "").trim().slice(0, 200),
-    status: "pending",
-  });
-  if (error) throw error;
-  return { slug, label };
-}
-
-export async function listPendingSuggestions() {
+export async function listSubtags(): Promise<TaxonomySubtag[]> {
   const supabase = await createClient();
   const { data } = await supabase
-    .from("tag_suggestions")
-    .select("*, profiles:suggested_by(handle)")
-    .eq("status", "pending")
-    .order("created_at", { ascending: true });
-
-  return (data ?? []).map((row) => {
-    const profile = row.profiles as unknown as { handle: string } | null;
-    return {
-      id: row.id as string,
-      slug: row.slug as string,
-      label: row.label as string,
-      category: row.category as string | null,
-      note: row.note as string,
-      created_at: row.created_at as string,
-      suggester_handle: profile?.handle ?? null,
-    };
-  });
+    .from("taxonomy_subtags")
+    .select("slug, parent_slug, label")
+    .order("parent_slug")
+    .order("label");
+  if (data?.length) return data as TaxonomySubtag[];
+  return SUBTAGS;
 }
 
-export async function approveSuggestion(
-  id: string,
-  category: TaxonomyCategory,
-) {
+export async function listSubtagsForParent(
+  parentSlug: string,
+): Promise<TaxonomySubtag[]> {
+  const normalized = normalizeTag(parentSlug);
+  const all = await listSubtags();
+  return all.filter((s) => s.parent_slug === normalized);
+}
+
+export async function getTaxonomySubtag(
+  slug: string,
+): Promise<TaxonomySubtag | null> {
+  const normalized = normalizeTag(slug);
   const supabase = await createClient();
-  const { data: row } = await supabase
-    .from("tag_suggestions")
-    .select("*")
-    .eq("id", id)
-    .eq("status", "pending")
+  const { data } = await supabase
+    .from("taxonomy_subtags")
+    .select("slug, parent_slug, label")
+    .eq("slug", normalized)
     .maybeSingle();
-  if (!row) throw new Error("Not found");
-
-  const { error: insertError } = await supabase.from("taxonomy_tags").upsert({
-    slug: row.slug,
-    label: row.label,
-    category,
-  });
-  if (insertError) throw insertError;
-
-  const { error } = await supabase
-    .from("tag_suggestions")
-    .update({ status: "approved" })
-    .eq("id", id);
-  if (error) throw error;
+  if (data) return data as TaxonomySubtag;
+  return SUBTAGS.find((s) => s.slug === normalized) ?? null;
 }
 
-export async function rejectSuggestion(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("tag_suggestions")
-    .update({ status: "rejected" })
-    .eq("id", id)
-    .eq("status", "pending");
-  if (error) throw error;
+export async function isApprovedSubtag(slug: string): Promise<boolean> {
+  return Boolean(await getTaxonomySubtag(slug));
 }
 
 export async function listRelatedInCategory(

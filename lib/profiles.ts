@@ -2,11 +2,16 @@ import { decorateProfile, touchStreak } from "@/lib/game";
 import { createClient } from "@/lib/supabase/server";
 import { isBlockedEither, isMuted } from "@/lib/social";
 import { clampLevel, normalizeHandle, normalizeTag } from "@/lib/tags";
-import { isApprovedTag } from "@/lib/taxonomy";
+import {
+  getTaxonomySubtag,
+  isApprovedSubtag,
+  isApprovedTag,
+} from "@/lib/taxonomy";
 import type {
   Endorsement,
   FeedSort,
   Profile,
+  ProfileSubtag,
   ProfileTag,
   ProfileWithTags,
   RisingProfile,
@@ -71,6 +76,33 @@ async function listEndorsements(profileId: string): Promise<Endorsement[]> {
   });
 }
 
+async function loadProfileSubtags(
+  profileId: string,
+): Promise<ProfileSubtag[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profile_subtags")
+    .select("subtag_slug, taxonomy_subtags(slug, label, parent_slug)")
+    .eq("profile_id", profileId);
+
+  return (data ?? [])
+    .map((row) => {
+      const meta = row.taxonomy_subtags as unknown as {
+        slug: string;
+        label: string;
+        parent_slug: string;
+      } | null;
+      if (!meta) return null;
+      return {
+        slug: meta.slug,
+        label: meta.label,
+        parent_slug: meta.parent_slug,
+      };
+    })
+    .filter((row): row is ProfileSubtag => Boolean(row))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 async function attachTags(profile: Profile): Promise<ProfileWithTags> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -93,10 +125,12 @@ async function attachTags(profile: Profile): Promise<ProfileWithTags> {
       counts.get(row.tag as string) ?? 0,
     ),
   );
+  const subtags = await loadProfileSubtags(profile.id);
   const deco = decorateProfile(profile, tags);
   return {
     ...profile,
     tags,
+    subtags,
     primary_tag: tags.find((t) => t.is_primary) ?? null,
     endorsements: await listEndorsements(profile.id),
     title: deco.title,
@@ -223,6 +257,7 @@ export async function listByTag(
   tag: string,
   level?: number,
   viewerId: string | null = null,
+  subtag?: string,
 ): Promise<ProfileWithTags[]> {
   const normalized = normalizeTag(tag);
   const supabase = await createClient();
@@ -233,9 +268,22 @@ export async function listByTag(
   if (level != null) query = query.eq("level", clampLevel(level));
 
   const { data } = await query;
-  const profiles = (data ?? [])
+  let profiles = (data ?? [])
     .map((row) => row.profiles as unknown as Profile)
     .filter(Boolean);
+
+  const sub = subtag ? normalizeTag(subtag) : "";
+  if (sub) {
+    const { data: subRows } = await supabase
+      .from("profile_subtags")
+      .select("profile_id")
+      .eq("subtag_slug", sub);
+    const allowed = new Set(
+      (subRows ?? []).map((row) => row.profile_id as string),
+    );
+    profiles = profiles.filter((p) => allowed.has(p.id));
+  }
+
   const mapped = await Promise.all(profiles.map((p) => attachTags(p)));
   return visibleToViewer(mapped, viewerId);
 }
@@ -364,18 +412,63 @@ async function normalizeTagInputs(tags: TagInput[]) {
   return cleaned;
 }
 
+async function normalizeSubtagInputs(
+  parentTags: string[],
+  subtags: string[],
+): Promise<string[]> {
+  const parents = new Set(parentTags);
+  const cleaned: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of subtags) {
+    const slug = normalizeTag(raw);
+    if (!slug || seen.has(slug)) continue;
+    if (!(await isApprovedSubtag(slug))) {
+      throw new Error(`Sub-tag "${slug}" is not in the curated taxonomy`);
+    }
+    const meta = await getTaxonomySubtag(slug);
+    if (!meta || !parents.has(meta.parent_slug)) {
+      throw new Error(
+        `Sub-tag "${slug}" requires its parent tag on the profile`,
+      );
+    }
+    seen.add(slug);
+    cleaned.push(slug);
+  }
+
+  return cleaned;
+}
+
+async function replaceProfileSubtags(profileId: string, subtags: string[]) {
+  const supabase = await createClient();
+  await supabase.from("profile_subtags").delete().eq("profile_id", profileId);
+  if (subtags.length === 0) return;
+  const { error } = await supabase.from("profile_subtags").insert(
+    subtags.map((subtag_slug) => ({
+      profile_id: profileId,
+      subtag_slug,
+    })),
+  );
+  if (error) throw error;
+}
+
 export async function createProfile(input: {
   userId: string;
   handle: string;
   bio: string;
   looking_for?: string;
   tags: TagInput[];
+  subtags?: string[];
 }): Promise<ProfileWithTags> {
   const handle = normalizeHandle(input.handle);
   if (!handle) throw new Error("Handle required");
   if (await getProfileByHandle(handle)) throw new Error("Handle already taken");
 
   const tags = await normalizeTagInputs(input.tags);
+  const subtags = await normalizeSubtagInputs(
+    tags.map((t) => t.tag),
+    input.subtags ?? [],
+  );
   const supabase = await createClient();
   const now = new Date().toISOString();
 
@@ -401,6 +494,8 @@ export async function createProfile(input: {
     })),
   );
   if (tagsError) throw tagsError;
+
+  await replaceProfileSubtags(input.userId, subtags);
 
   await supabase.from("rank_events").insert({
     profile_id: input.userId,
@@ -428,9 +523,18 @@ export async function createProfile(input: {
 
 export async function updateProfile(
   profileId: string,
-  input: { bio: string; looking_for: string; tags: TagInput[] },
+  input: {
+    bio: string;
+    looking_for: string;
+    tags: TagInput[];
+    subtags?: string[];
+  },
 ): Promise<ProfileWithTags> {
   const tags = await normalizeTagInputs(input.tags);
+  const subtags = await normalizeSubtagInputs(
+    tags.map((t) => t.tag),
+    input.subtags ?? [],
+  );
   const supabase = await createClient();
   const now = new Date().toISOString();
 
@@ -455,6 +559,8 @@ export async function updateProfile(
     })),
   );
   if (tagsError) throw tagsError;
+
+  await replaceProfileSubtags(profileId, subtags);
 
   await touchStreak(profileId);
   const profile = await getProfileWithTagsById(profileId);

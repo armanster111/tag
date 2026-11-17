@@ -21,6 +21,12 @@ export type ProfileTag = {
   endorsement_count: number;
 };
 
+export type ProfileSubtag = {
+  slug: string;
+  label: string;
+  parent_slug: string;
+};
+
 export type Endorsement = {
   id: string;
   from_profile_id: string;
@@ -32,6 +38,7 @@ export type Endorsement = {
 
 export type ProfileWithTags = Profile & {
   tags: ProfileTag[];
+  subtags: ProfileSubtag[];
   primary_tag: ProfileTag | null;
   endorsements: Endorsement[];
   title: string | null;

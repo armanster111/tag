@@ -1,17 +1,18 @@
 import { TagFields } from "@/components/TagPicker";
-import { SuggestTagForm } from "@/components/SuggestTagForm";
-import type { TaxonomyTag } from "@/lib/taxonomy-data";
+import type { TaxonomySubtag, TaxonomyTag } from "@/lib/taxonomy-data";
 
 type ProfileFormProps = {
   action: (formData: FormData) => Promise<void>;
   submitLabel: string;
   taxonomy: TaxonomyTag[];
+  subtags?: TaxonomySubtag[];
   defaultHandle?: string;
   defaultBio?: string;
   defaultLookingFor?: string;
   defaultPrimaryTag?: string;
   defaultPrimaryLevel?: number;
   defaultSecondaries?: Array<{ slug: string; level: number }>;
+  defaultSubtags?: string[];
   handleLocked?: boolean;
 };
 
@@ -19,12 +20,14 @@ export function ProfileForm({
   action,
   submitLabel,
   taxonomy,
+  subtags = [],
   defaultHandle = "",
   defaultBio = "",
   defaultLookingFor = "",
   defaultPrimaryTag = "",
   defaultPrimaryLevel = 5,
   defaultSecondaries = [],
+  defaultSubtags = [],
   handleLocked = false,
 }: ProfileFormProps) {
   return (
@@ -64,17 +67,17 @@ export function ProfileForm({
 
         <TagFields
           taxonomy={taxonomy}
+          subtags={subtags}
           defaultPrimary={defaultPrimaryTag}
           defaultPrimaryLevel={defaultPrimaryLevel}
           defaultSecondaries={defaultSecondaries}
+          defaultSubtags={defaultSubtags}
         />
 
         <button type="submit" className="btn">
           {submitLabel}
         </button>
       </form>
-
-      <SuggestTagForm />
     </div>
   );
 }

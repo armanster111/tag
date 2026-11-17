@@ -89,6 +89,20 @@ export default async function ProfilePage({
         ))}
       </div>
 
+      {profile.subtags.length > 0 ? (
+        <div className="tag-row" style={{ marginBottom: "1rem" }}>
+          {profile.subtags.map((sub) => (
+            <Link
+              key={sub.slug}
+              href={`/t/${encodeURIComponent(sub.parent_slug)}?sub=${encodeURIComponent(sub.slug)}`}
+              className="subtag-chip active"
+            >
+              {sub.label}
+            </Link>
+          ))}
+        </div>
+      ) : null}
+
       {profile.endorsements.length > 0 ? (
         <div className="endorse-list">
           <h2 className="section-title">Endorsements</h2>

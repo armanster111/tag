@@ -168,6 +168,46 @@ button.btn {
   outline: 2px solid var(--accent);
 }
 
+.subtag-block,
+.subtag-browse {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.subtag-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.subtag-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font: inherit;
+  font-size: 0.9rem;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+a.subtag-chip {
+  text-decoration: none;
+}
+
+.subtag-chip.active,
+button.subtag-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.subtag-chip:hover {
+  border-color: var(--accent);
+}
+
 .tag-level {
   font-variant-numeric: tabular-nums;
   color: var(--accent);

@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CATEGORY_LABELS,
   type TaxonomyCategory,
+  type TaxonomySubtag,
   type TaxonomyTag,
 } from "@/lib/taxonomy-data";
 
@@ -11,26 +12,65 @@ type Picked = { slug: string; level: number };
 
 export function TagFields({
   taxonomy,
+  subtags = [],
   defaultPrimary,
   defaultPrimaryLevel = 5,
   defaultSecondaries = [],
+  defaultSubtags = [],
 }: {
   taxonomy: TaxonomyTag[];
+  subtags?: TaxonomySubtag[];
   defaultPrimary?: string;
   defaultPrimaryLevel?: number;
   defaultSecondaries?: Picked[];
+  defaultSubtags?: string[];
 }) {
   const [primary, setPrimary] = useState(defaultPrimary ?? "");
   const [primaryLevel, setPrimaryLevel] = useState(defaultPrimaryLevel);
   const [secondaries, setSecondaries] = useState<Picked[]>(defaultSecondaries);
+  const [selectedSubtags, setSelectedSubtags] = useState<string[]>(
+    defaultSubtags,
+  );
 
   const used = useMemo(() => {
-    const set = new Set(
-      secondaries.map((s) => s.slug).filter(Boolean),
-    );
+    const set = new Set(secondaries.map((s) => s.slug).filter(Boolean));
     if (primary) set.add(primary);
     return set;
   }, [primary, secondaries]);
+
+  const parentSlugs = useMemo(() => {
+    return [...used].filter(Boolean);
+  }, [used]);
+
+  const availableByParent = useMemo(() => {
+    const map = new Map<string, TaxonomySubtag[]>();
+    for (const sub of subtags) {
+      if (!parentSlugs.includes(sub.parent_slug)) continue;
+      const list = map.get(sub.parent_slug) ?? [];
+      list.push(sub);
+      map.set(sub.parent_slug, list);
+    }
+    return map;
+  }, [subtags, parentSlugs]);
+
+  const labelFor = (slug: string) =>
+    taxonomy.find((t) => t.slug === slug)?.label ?? slug;
+
+  function toggleSubtag(slug: string) {
+    setSelectedSubtags((prev) =>
+      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug],
+    );
+  }
+
+  useEffect(() => {
+    setSelectedSubtags((prev) => {
+      const next = prev.filter((slug) => {
+        const meta = subtags.find((s) => s.slug === slug);
+        return Boolean(meta && parentSlugs.includes(meta.parent_slug));
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [parentSlugs, subtags]);
 
   return (
     <div className="tag-fields">
@@ -44,6 +84,7 @@ export function TagFields({
           .map((s) => `${s.slug}:${s.level}`)
           .join(",")}
       />
+      <input type="hidden" name="subtags" value={selectedSubtags.join(",")} />
 
       <label>
         Primary tag
@@ -129,6 +170,73 @@ export function TagFields({
           </div>
         ))}
       </div>
+
+      {[...availableByParent.entries()].map(([parent, options]) => (
+        <SubtagPicker
+          key={parent}
+          parentLabel={labelFor(parent)}
+          options={options}
+          selected={selectedSubtags}
+          onToggle={toggleSubtag}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SubtagPicker({
+  parentLabel,
+  options,
+  selected,
+  onToggle,
+}: {
+  parentLabel: string;
+  options: TaxonomySubtag[];
+  selected: string[];
+  onToggle: (slug: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const matches = options.filter(
+    (s) =>
+      !q ||
+      s.slug.includes(q) ||
+      s.label.toLowerCase().includes(q),
+  );
+
+  return (
+    <div className="subtag-block">
+      <div className="row-between">
+        <span>Sub-tags for {parentLabel}</span>
+      </div>
+      <p className="hint">Optional — pick fixed children from the list.</p>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={`Filter ${parentLabel} sub-tags…`}
+        aria-label={`Filter ${parentLabel} sub-tags`}
+      />
+      <div className="subtag-options">
+        {matches.length === 0 ? (
+          <p className="meta">No matching sub-tags.</p>
+        ) : (
+          matches.map((sub) => {
+            const on = selected.includes(sub.slug);
+            return (
+              <button
+                key={sub.slug}
+                type="button"
+                className={`subtag-chip${on ? " active" : ""}`}
+                onClick={() => onToggle(sub.slug)}
+                aria-pressed={on}
+              >
+                {sub.label}
+              </button>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
@@ -196,7 +304,7 @@ function TagTypeahead({
       {open ? (
         <ul className="typeahead-menu">
           {matches.length === 0 ? (
-            <li className="meta">No matches — suggest a new tag below.</li>
+            <li className="meta">No matches in the curated list.</li>
           ) : (
             matches.map((tag) => (
               <li key={tag.slug}>

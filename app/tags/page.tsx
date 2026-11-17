@@ -1,4 +1,3 @@
-import { SuggestTagForm } from "@/components/SuggestTagForm";
 import { listTaxonomyByCategory } from "@/lib/taxonomy";
 import Link from "next/link";
 
@@ -13,10 +12,7 @@ export default async function TagsIndexPage() {
         <h1 className="page-title">Tag taxonomy</h1>
         <p className="lede">
           Curated interests grouped by category. Profiles pick from this list
-          only — suggest anything missing for review.
-        </p>
-        <p className="meta">
-          <Link href="/tags/review">Review pending suggestions</Link>
+          only — some tags also have fixed sub-tags on their pages.
         </p>
       </div>
 
@@ -36,8 +32,6 @@ export default async function TagsIndexPage() {
           </div>
         </section>
       ))}
-
-      <SuggestTagForm />
     </section>
   );
 }

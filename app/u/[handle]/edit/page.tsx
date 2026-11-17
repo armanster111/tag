@@ -2,7 +2,7 @@ import { saveProfile } from "@/app/actions";
 import { ProfileForm } from "@/components/ProfileForm";
 import { getProfileWithTagsByHandle } from "@/lib/profiles";
 import { getSessionProfileId } from "@/lib/session";
-import { listTaxonomy } from "@/lib/taxonomy";
+import { listSubtags, listTaxonomy } from "@/lib/taxonomy";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -26,15 +26,17 @@ export default async function EditProfilePage({
   const secondaries = profile.tags
     .filter((t) => !t.is_primary)
     .map((t) => ({ slug: t.tag, level: t.level }));
-  const taxonomy = await listTaxonomy();
+  const [taxonomy, subtags] = await Promise.all([
+    listTaxonomy(),
+    listSubtags(),
+  ]);
 
   return (
     <section className="stack">
       <div>
         <h1 className="page-title">Edit @{profile.handle}</h1>
         <p className="lede">
-          Tags must be chosen from the taxonomy. Suggest anything missing for
-          review.
+          Tags and sub-tags must be chosen from the curated taxonomy.
         </p>
       </div>
       {query.error === "taxonomy" ? (
@@ -44,12 +46,14 @@ export default async function EditProfilePage({
         action={saveProfile}
         submitLabel="Save profile"
         taxonomy={taxonomy}
+        subtags={subtags}
         defaultHandle={profile.handle}
         defaultBio={profile.bio}
         defaultLookingFor={profile.looking_for}
         defaultPrimaryTag={primary?.tag ?? ""}
         defaultPrimaryLevel={primary?.level ?? 5}
         defaultSecondaries={secondaries}
+        defaultSubtags={profile.subtags.map((s) => s.slug)}
         handleLocked
       />
     </section>

@@ -14,6 +14,12 @@ export type TaxonomyTag = {
   category: TaxonomyCategory;
 };
 
+export type TaxonomySubtag = {
+  slug: string;
+  parent_slug: string;
+  label: string;
+};
+
 /** Curated starter taxonomy — profiles may only attach approved slugs. */
 export const TAXONOMY: TaxonomyTag[] = [
   { slug: "photography", label: "Photography", category: "creative" },
@@ -79,3 +85,38 @@ export const CATEGORY_LABELS: Record<TaxonomyCategory, string> = {
   games: "Games",
   learning: "Learning",
 };
+
+/** Curated child sub-tags — only attachable when the parent main tag is selected. */
+export const SUBTAGS: TaxonomySubtag[] = [
+  { slug: "fortnite", parent_slug: "video-games", label: "Fortnite" },
+  { slug: "minecraft", parent_slug: "video-games", label: "Minecraft" },
+  { slug: "zelda", parent_slug: "video-games", label: "Zelda" },
+  { slug: "valorant", parent_slug: "video-games", label: "Valorant" },
+  {
+    slug: "animal-crossing",
+    parent_slug: "video-games",
+    label: "Animal Crossing",
+  },
+  { slug: "openings", parent_slug: "chess", label: "Openings" },
+  { slug: "endgames", parent_slug: "chess", label: "Endgames" },
+  { slug: "blitz", parent_slug: "chess", label: "Blitz" },
+  { slug: "classical", parent_slug: "chess", label: "Classical" },
+  { slug: "chess-puzzles", parent_slug: "chess", label: "Puzzles" },
+  { slug: "javascript", parent_slug: "programming", label: "JavaScript" },
+  { slug: "python", parent_slug: "programming", label: "Python" },
+  { slug: "rust", parent_slug: "programming", label: "Rust" },
+  { slug: "typescript", parent_slug: "programming", label: "TypeScript" },
+  { slug: "systems-go", parent_slug: "programming", label: "Go" },
+  { slug: "portrait", parent_slug: "photography", label: "Portrait" },
+  { slug: "landscape", parent_slug: "photography", label: "Landscape" },
+  { slug: "street-photo", parent_slug: "photography", label: "Street" },
+  {
+    slug: "film-photography",
+    parent_slug: "photography",
+    label: "Film",
+  },
+  { slug: "italian-cuisine", parent_slug: "cooking", label: "Italian" },
+  { slug: "sushi", parent_slug: "cooking", label: "Sushi" },
+  { slug: "meal-prep", parent_slug: "cooking", label: "Meal prep" },
+  { slug: "pastry", parent_slug: "cooking", label: "Pastry" },
+];

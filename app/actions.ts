@@ -29,12 +29,6 @@ import {
 } from "@/lib/social";
 import { createClient } from "@/lib/supabase/server";
 import { isValidHandle, normalizeHandle } from "@/lib/tags";
-import {
-  approveSuggestion,
-  rejectSuggestion,
-  suggestTag,
-  type TaxonomyCategory,
-} from "@/lib/taxonomy";
 
 function parseTagsFromForm(formData: FormData): TagInput[] {
   const primaryTag = String(formData.get("primary_tag") ?? "");
@@ -57,6 +51,13 @@ function parseTagsFromForm(formData: FormData): TagInput[] {
   }
 
   return tags;
+}
+
+function parseSubtagsFromForm(formData: FormData): string[] {
+  return String(formData.get("subtags") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 async function requireSession() {
@@ -114,6 +115,7 @@ export async function onboardProfile(formData: FormData) {
       bio,
       looking_for,
       tags: parseTagsFromForm(formData),
+      subtags: parseSubtagsFromForm(formData),
     });
     revalidatePath("/");
     redirect(`/u/${profile.handle}`);
@@ -136,6 +138,7 @@ export async function saveProfile(formData: FormData) {
       bio: String(formData.get("bio") ?? ""),
       looking_for: String(formData.get("looking_for") ?? ""),
       tags: parseTagsFromForm(formData),
+      subtags: parseSubtagsFromForm(formData),
     });
   } catch {
     redirect(`/u/${handle}/edit?error=taxonomy`);
@@ -143,49 +146,6 @@ export async function saveProfile(formData: FormData) {
   revalidatePath("/");
   revalidatePath(`/u/${handle}`);
   redirect(`/u/${handle}`);
-}
-
-export async function suggestNewTag(formData: FormData): Promise<{
-  ok: boolean;
-  message: string;
-}> {
-  const sessionId = await getAuthUserId();
-  try {
-    const result = await suggestTag({
-      label: String(formData.get("label") ?? ""),
-      category: String(formData.get("category") ?? "") || undefined,
-      note: String(formData.get("note") ?? ""),
-      suggestedBy: sessionId,
-    });
-    revalidatePath("/tags");
-    revalidatePath("/tags/review");
-    return {
-      ok: true,
-      message: `"${result.label}" submitted for review as ${result.slug}.`,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : "Could not suggest tag",
-    };
-  }
-}
-
-export async function approveTagSuggestion(formData: FormData) {
-  await requireSession();
-  const id = String(formData.get("id") ?? "");
-  const category = String(formData.get("category") ?? "") as TaxonomyCategory;
-  await approveSuggestion(id, category);
-  revalidatePath("/tags");
-  revalidatePath("/tags/review");
-  redirect("/tags/review");
-}
-
-export async function rejectTagSuggestion(formData: FormData) {
-  await requireSession();
-  await rejectSuggestion(String(formData.get("id") ?? ""));
-  revalidatePath("/tags/review");
-  redirect("/tags/review");
 }
 
 export async function endorseProfileTag(formData: FormData) {
